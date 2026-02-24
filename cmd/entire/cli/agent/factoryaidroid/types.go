@@ -64,15 +64,19 @@ type postToolHookInputRaw struct {
 
 // Tool names used in Factory Droid transcripts.
 const (
+	ToolCreate       = "Create"
 	ToolWrite        = "Write"
 	ToolEdit         = "Edit"
+	ToolMultiEdit    = "MultiEdit"
 	ToolNotebookEdit = "NotebookEdit"
 )
 
 // FileModificationTools lists tools that create or modify files.
 var FileModificationTools = []string{
+	ToolCreate,
 	ToolWrite,
 	ToolEdit,
+	ToolMultiEdit,
 	ToolNotebookEdit,
 }
 

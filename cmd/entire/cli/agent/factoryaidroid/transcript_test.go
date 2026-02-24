@@ -197,6 +197,40 @@ func TestExtractModifiedFiles_NotebookEdit(t *testing.T) {
 	}
 }
 
+func TestExtractModifiedFiles_CreateAndMultiEdit(t *testing.T) {
+	t.Parallel()
+
+	data := []byte(`{"type":"message","id":"a1","message":{"role":"assistant","content":[{"type":"tool_use","name":"Create","input":{"file_path":"new_file.go"}}]}}
+{"type":"message","id":"a2","message":{"role":"assistant","content":[{"type":"tool_use","name":"MultiEdit","input":{"file_path":"existing_file.go"}}]}}
+`)
+
+	lines, err := ParseDroidTranscriptFromBytes(data)
+	if err != nil {
+		t.Fatalf("ParseDroidTranscriptFromBytes() error = %v", err)
+	}
+	files := ExtractModifiedFiles(lines)
+
+	if len(files) != 2 {
+		t.Fatalf("ExtractModifiedFiles() got %d files, want 2", len(files))
+	}
+
+	hasFile := func(name string) bool {
+		for _, f := range files {
+			if f == name {
+				return true
+			}
+		}
+		return false
+	}
+
+	if !hasFile("new_file.go") {
+		t.Error("ExtractModifiedFiles() missing new_file.go")
+	}
+	if !hasFile("existing_file.go") {
+		t.Error("ExtractModifiedFiles() missing existing_file.go")
+	}
+}
+
 func TestExtractModifiedFiles_Empty(t *testing.T) {
 	t.Parallel()
 

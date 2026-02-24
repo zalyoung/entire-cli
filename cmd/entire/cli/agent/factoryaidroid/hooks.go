@@ -158,6 +158,14 @@ func (f *FactoryAIDroidAgent) InstallHooks(localDev bool, force bool) (int, erro
 		sessionStart = addHookToMatcher(sessionStart, "", sessionStartCmd)
 		count++
 	}
+	// Also install user-prompt-submit on SessionStart to ensure TurnStart fires
+	// even when UserPromptSubmit doesn't (e.g., droid exec mode).
+	// The user-prompt-submit handler gracefully handles SessionStart's stdin format
+	// (userPromptSubmitRaw is a superset of sessionInfoRaw; Prompt defaults to "").
+	if !hookCommandExists(sessionStart, userPromptSubmitCmd) {
+		sessionStart = addHookToMatcher(sessionStart, "", userPromptSubmitCmd)
+		count++
+	}
 	if !hookCommandExists(sessionEnd, sessionEndCmd) {
 		sessionEnd = addHookToMatcher(sessionEnd, "", sessionEndCmd)
 		count++

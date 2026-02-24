@@ -387,6 +387,11 @@ func (r *FactoryAIDroidRunner) RunPrompt(ctx context.Context, workDir string, pr
 }
 
 func (r *FactoryAIDroidRunner) RunPromptWithTools(ctx context.Context, workDir string, prompt string, tools []string) (*AgentResult, error) {
+	_ = tools
+	return r.runPromptWithExec(ctx, workDir, prompt)
+}
+
+func (r *FactoryAIDroidRunner) runPromptWithExec(ctx context.Context, workDir string, prompt string) (*AgentResult, error) {
 	args := []string{
 		"exec",
 		"--cwd", workDir,
@@ -430,6 +435,14 @@ func (r *FactoryAIDroidRunner) RunPromptWithTools(ctx context.Context, workDir s
 		Stderr:   stderr.String(),
 		Duration: duration,
 	}
+	if droidCreditsExhausted(result.Stdout, result.Stderr) {
+		result.ExitCode = 1
+		return result, errors.New("droid account credits exhausted; reload tokens at https://app.factory.ai/settings/billing")
+	}
+	if droidRateLimited(result.Stdout, result.Stderr) {
+		result.ExitCode = 1
+		return result, errors.New("droid rate limited (429 Too Many Requests); retry after a short wait")
+	}
 
 	if err != nil {
 		exitErr := &exec.ExitError{}
@@ -444,4 +457,17 @@ func (r *FactoryAIDroidRunner) RunPromptWithTools(ctx context.Context, workDir s
 
 	result.ExitCode = 0
 	return result, nil
+}
+
+func droidCreditsExhausted(stdout string, stderr string) bool {
+	lower := strings.ToLower(stdout + "\n" + stderr)
+	return strings.Contains(lower, "ready for more? reload your tokens") ||
+		strings.Contains(lower, "reload your tokens at https://app.factory.ai/settings/billing")
+}
+
+func droidRateLimited(stdout string, stderr string) bool {
+	lower := strings.ToLower(stdout + "\n" + stderr)
+	return strings.Contains(lower, "error: 429") ||
+		strings.Contains(lower, "\"code\":\"429\"") ||
+		strings.Contains(lower, "too many requests")
 }

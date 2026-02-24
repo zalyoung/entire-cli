@@ -82,6 +82,35 @@ func TestParseHookEvent_TurnStart(t *testing.T) {
 	}
 }
 
+// TestParseHookEvent_TurnStart_SessionStartFormat verifies that parseTurnStart
+// handles SessionStart-format stdin (no "prompt" field). This happens when
+// user-prompt-submit is installed on the SessionStart event type to ensure
+// TurnStart fires in droid exec mode.
+func TestParseHookEvent_TurnStart_SessionStartFormat(t *testing.T) {
+	t.Parallel()
+
+	ag := &FactoryAIDroidAgent{}
+	// SessionStart-format stdin: only session_id and transcript_path, no prompt
+	input := `{"session_id": "exec-sess", "transcript_path": "/tmp/exec.jsonl"}`
+
+	event, err := ag.ParseHookEvent(HookNameUserPromptSubmit, strings.NewReader(input))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if event.Type != agent.TurnStart {
+		t.Errorf("expected TurnStart, got %v", event.Type)
+	}
+	if event.SessionID != "exec-sess" {
+		t.Errorf("expected session_id 'exec-sess', got %q", event.SessionID)
+	}
+	if event.SessionRef != "/tmp/exec.jsonl" {
+		t.Errorf("expected transcript_path '/tmp/exec.jsonl', got %q", event.SessionRef)
+	}
+	if event.Prompt != "" {
+		t.Errorf("expected empty prompt, got %q", event.Prompt)
+	}
+}
+
 func TestParseHookEvent_TurnEnd(t *testing.T) {
 	t.Parallel()
 

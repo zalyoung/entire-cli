@@ -20,9 +20,10 @@ func TestInstallHooks_FreshInstall(t *testing.T) {
 		t.Fatalf("InstallHooks() error = %v", err)
 	}
 
-	// 7 hooks: SessionStart, SessionEnd, Stop, UserPromptSubmit, PreToolUse[Task], PostToolUse[Task], PreCompact
-	if count != 7 {
-		t.Errorf("InstallHooks() count = %d, want 7", count)
+	// 8 hooks: SessionStart (session-start + user-prompt-submit), SessionEnd, Stop,
+	// UserPromptSubmit, PreToolUse[Task], PostToolUse[Task], PreCompact
+	if count != 8 {
+		t.Errorf("InstallHooks() count = %d, want 8", count)
 	}
 
 	// Verify settings.json was created with hooks
@@ -52,6 +53,7 @@ func TestInstallHooks_FreshInstall(t *testing.T) {
 
 	// Verify hook commands
 	assertFactoryHookExists(t, settings.Hooks.SessionStart, "", "entire hooks factoryai-droid session-start", "SessionStart")
+	assertFactoryHookExists(t, settings.Hooks.SessionStart, "", "entire hooks factoryai-droid user-prompt-submit", "SessionStart user-prompt-submit")
 	assertFactoryHookExists(t, settings.Hooks.SessionEnd, "", "entire hooks factoryai-droid session-end", "SessionEnd")
 	assertFactoryHookExists(t, settings.Hooks.Stop, "", "entire hooks factoryai-droid stop", "Stop")
 	assertFactoryHookExists(t, settings.Hooks.UserPromptSubmit, "", "entire hooks factoryai-droid user-prompt-submit", "UserPromptSubmit")
@@ -76,8 +78,8 @@ func TestInstallHooks_Idempotent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("first InstallHooks() error = %v", err)
 	}
-	if count1 != 7 {
-		t.Errorf("first InstallHooks() count = %d, want 7", count1)
+	if count1 != 8 {
+		t.Errorf("first InstallHooks() count = %d, want 8", count1)
 	}
 
 	// Second install should add 0 hooks
@@ -114,6 +116,8 @@ func TestInstallHooks_LocalDev(t *testing.T) {
 	// Verify local dev commands use FACTORY_PROJECT_DIR format
 	assertFactoryHookExists(t, settings.Hooks.SessionStart, "",
 		"go run ${FACTORY_PROJECT_DIR}/cmd/entire/main.go hooks factoryai-droid session-start", "SessionStart localDev")
+	assertFactoryHookExists(t, settings.Hooks.SessionStart, "",
+		"go run ${FACTORY_PROJECT_DIR}/cmd/entire/main.go hooks factoryai-droid user-prompt-submit", "SessionStart user-prompt-submit localDev")
 	assertFactoryHookExists(t, settings.Hooks.SessionEnd, "",
 		"go run ${FACTORY_PROJECT_DIR}/cmd/entire/main.go hooks factoryai-droid session-end", "SessionEnd localDev")
 	assertFactoryHookExists(t, settings.Hooks.Stop, "",
@@ -145,8 +149,8 @@ func TestInstallHooks_Force(t *testing.T) {
 	if err != nil {
 		t.Fatalf("force InstallHooks() error = %v", err)
 	}
-	if count != 7 {
-		t.Errorf("force InstallHooks() count = %d, want 7", count)
+	if count != 8 {
+		t.Errorf("force InstallHooks() count = %d, want 8", count)
 	}
 }
 
@@ -356,6 +360,7 @@ func TestInstallHooks_PreservesUserHooksOnSameType(t *testing.T) {
 		}
 		assertFactoryHookExists(t, matchers, "", "echo user session start", "user SessionStart hook")
 		assertFactoryHookExists(t, matchers, "", "entire hooks factoryai-droid session-start", "Entire SessionStart hook")
+		assertFactoryHookExists(t, matchers, "", "entire hooks factoryai-droid user-prompt-submit", "Entire SessionStart user-prompt-submit hook")
 	})
 
 	t.Run("PostToolUse", func(t *testing.T) {
