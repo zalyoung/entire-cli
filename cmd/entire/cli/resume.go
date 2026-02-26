@@ -208,11 +208,6 @@ func resumeMultipleCheckpoints(ctx context.Context, repo *git.Repository, checkp
 	}
 
 	strat := GetStrategy(ctx)
-	repoRoot, err := paths.WorktreeRoot(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to get worktree root: %w", err)
-	}
-
 	var allSessions []strategy.RestoredSession
 
 	for _, cpID := range checkpointIDs {
@@ -221,31 +216,6 @@ func resumeMultipleCheckpoints(ctx context.Context, repo *git.Repository, checkp
 			logging.Debug(logCtx, "skipping checkpoint without metadata",
 				slog.String("checkpoint_id", cpID.String()),
 				slog.String("error", metaErr.Error()),
-			)
-			continue
-		}
-
-		ag, agErr := strategy.ResolveAgentForRewind(metadata.Agent)
-		if agErr != nil {
-			logging.Debug(logCtx, "skipping checkpoint with unknown agent",
-				slog.String("checkpoint_id", cpID.String()),
-				slog.String("error", agErr.Error()),
-			)
-			continue
-		}
-
-		sessionDir, dirErr := ag.GetSessionDir(repoRoot)
-		if dirErr != nil {
-			logging.Debug(logCtx, "skipping checkpoint: cannot determine session dir",
-				slog.String("checkpoint_id", cpID.String()),
-				slog.String("error", dirErr.Error()),
-			)
-			continue
-		}
-		if mkErr := os.MkdirAll(sessionDir, 0o700); mkErr != nil {
-			logging.Debug(logCtx, "skipping checkpoint: cannot create session dir",
-				slog.String("checkpoint_id", cpID.String()),
-				slog.String("error", mkErr.Error()),
 			)
 			continue
 		}
