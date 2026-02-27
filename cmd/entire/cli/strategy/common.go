@@ -16,6 +16,7 @@ import (
 	"github.com/entireio/cli/cmd/entire/cli/agent"
 	"github.com/entireio/cli/cmd/entire/cli/checkpoint"
 	"github.com/entireio/cli/cmd/entire/cli/checkpoint/id"
+	"github.com/entireio/cli/cmd/entire/cli/logging"
 	"github.com/entireio/cli/cmd/entire/cli/paths"
 	"github.com/entireio/cli/cmd/entire/cli/trailers"
 
@@ -338,6 +339,10 @@ func EnsureMetadataBranch(repo *git.Repository) error {
 			}
 			// Local has real data and differs from remote — reconciliation
 			// is handled by EnsureMetadataReconciled at read/write time
+			logging.Debug(context.Background(), "metadata branch differs from remote, reconciliation deferred to read/write time",
+				"local_hash", localRef.Hash().String()[:7],
+				"remote_hash", remoteRef.Hash().String()[:7],
+			)
 		}
 		return nil
 	}
