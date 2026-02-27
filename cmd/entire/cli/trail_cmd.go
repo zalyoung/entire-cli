@@ -24,8 +24,9 @@ import (
 
 func newTrailCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "trail",
-		Short: "Manage trails for your branches",
+		Use:    "trail",
+		Short:  "Manage trails for your branches",
+		Hidden: true,
 		Long: `Trails are branch-centric work tracking abstractions. They describe the
 "why" and "what" of your work, while checkpoints capture the "how" and "when".
 
