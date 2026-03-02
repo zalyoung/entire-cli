@@ -527,16 +527,17 @@ func handleLifecycleSubagentEnd(ctx context.Context, ag agent.Agent, event *agen
 		}
 	}
 
-	// Load pre-task state and detect file changes
+	// Load pre-task state and detect file changes.
+	// If no pre-task state exists (agent doesn't support pre-task hook), fall back
+	// to the session's pre-prompt state. Without either, DetectFileChanges receives
+	// nil and treats ALL untracked files as new — which would create spurious task
+	// checkpoints for pre-existing untracked files (e.g., .github/hooks/entire.json).
 	preState, err := LoadPreTaskState(ctx, event.ToolUseID)
 	if err != nil {
 		logging.Warn(logCtx, "failed to load pre-task state",
 			slog.String("error", err.Error()))
 	}
-	var preUntrackedFiles []string
-	if preState != nil {
-		preUntrackedFiles = preState.PreUntrackedFiles()
-	}
+	preUntrackedFiles := resolveTaskPreUntrackedFiles(logCtx, preState, event.SessionID)
 	changes, err := DetectFileChanges(ctx, preUntrackedFiles)
 	if err != nil {
 		logging.Warn(logCtx, "failed to compute file changes",
@@ -633,6 +634,33 @@ func resolveTranscriptOffset(ctx context.Context, preState *PrePromptState, sess
 	}
 
 	return 0
+}
+
+// resolveTaskPreUntrackedFiles determines the pre-existing untracked files for task
+// checkpoint file-change detection. It checks pre-task state first, then falls back to
+// pre-prompt state for agents that don't have a SubagentStart hook (no pre-task capture).
+// Returns nil if neither state exists, which causes DetectFileChanges to treat all
+// untracked files as new.
+func resolveTaskPreUntrackedFiles(ctx context.Context, preTaskState *PreTaskState, sessionID string) []string {
+	if preTaskState != nil {
+		return preTaskState.PreUntrackedFiles()
+	}
+	if sessionID == "" {
+		return nil
+	}
+	// Fall back to session's pre-prompt state for agents without pre-task hooks
+	prePromptState, err := LoadPrePromptState(ctx, sessionID)
+	if err != nil {
+		logging.Warn(ctx, "failed to load pre-prompt state as fallback",
+			slog.String("error", err.Error()))
+		return nil
+	}
+	if prePromptState != nil {
+		logging.Debug(ctx, "using pre-prompt state as fallback for task file detection",
+			slog.Int("pre_existing_untracked_files", len(prePromptState.UntrackedFiles)))
+		return prePromptState.PreUntrackedFiles()
+	}
+	return nil
 }
 
 // createContextFile creates a context.md file for the session checkpoint.

@@ -162,12 +162,27 @@ Position = line count (JSONL format). Use `agent.ChunkJSONL()` / `agent.Reassemb
 - `.github` — contains hook configs (committed to repo, unlikely to be affected by rewind)
 - No agent-specific repo directory to protect
 
+## Subagent Lifecycle
+
+Copilot CLI has **one-sided** subagent hooks: `subagentStop` fires but `subagentStart` does NOT
+(tested by registering the hook — Copilot CLI ignores it). The transcript does contain
+`subagent.started` / `subagent.completed` events with `toolCallId`, but these are not
+surfaced as hooks.
+
+The `preToolUse` / `postToolUse` hooks fire with `toolName: "task"` for subagent lifecycle,
+which could be used as an alternative mechanism for `SubagentStart`/`SubagentEnd` in the future.
+
+Because there is no `SubagentStart` hook, the framework cannot capture pre-task state (untracked
+files snapshot). The `handleLifecycleSubagentEnd` dispatcher falls back to the session's
+pre-prompt state to avoid spurious task checkpoints from pre-existing untracked files
+(e.g., `.github/hooks/entire.json`).
+
 ## Gaps & Limitations
 
-- `subagentStop` payload not yet captured (need a session that spawns subagents)
-- `preToolUse` / `postToolUse` payloads not yet captured (need a session with tool usage)
 - No `Compaction` event — Copilot CLI doesn't appear to have a context compaction hook
-- No `SubagentStart` event — only `subagentStop` is available (one-sided)
+- No `SubagentStart` hook — only `subagentStop` fires; framework falls back to pre-prompt state
+- `subagentStop` payload fields beyond `timestamp`/`cwd`/`sessionId` not yet fully captured
+- `preToolUse` / `postToolUse` payloads not yet leveraged (could provide SubagentStart equivalent)
 - Tool request schema in transcripts needs verification with a real tool-using session
 - `transcriptPath` only available in `agentStop` hook — `userPromptSubmitted` and `sessionStart` don't include it, so we compute it from `~/.copilot/session-state/<sessionId>/events.jsonl`
 

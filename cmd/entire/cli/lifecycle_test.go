@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
@@ -551,6 +552,82 @@ func TestDispatchLifecycleEvent_RoutesToCorrectHandler(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// --- resolveTaskPreUntrackedFiles tests ---
+
+func TestResolveTaskPreUntrackedFiles_PrefersPreTaskState(t *testing.T) {
+	t.Parallel()
+
+	preTask := &PreTaskState{
+		UntrackedFiles: []string{"hooks.json", "config.yaml"},
+	}
+
+	result := resolveTaskPreUntrackedFiles(context.Background(), preTask, "any-session")
+	if len(result) != 2 {
+		t.Fatalf("expected 2 files from pre-task state, got %d", len(result))
+	}
+	if result[0] != "hooks.json" || result[1] != "config.yaml" {
+		t.Errorf("expected [hooks.json, config.yaml], got %v", result)
+	}
+}
+
+func TestResolveTaskPreUntrackedFiles_FallsBackToPrePromptState(t *testing.T) {
+	// Cannot use t.Parallel() because we use t.Chdir()
+	tmpDir := t.TempDir()
+	t.Chdir(tmpDir)
+
+	// Need a git repo for paths.AbsPath to resolve .entire/tmp
+	setupGitRepoWithCommit(t, tmpDir)
+	paths.ClearWorktreeRootCache()
+
+	// Create .entire/tmp and write a pre-prompt state file
+	entireTmpDir := filepath.Join(tmpDir, ".entire", "tmp")
+	if err := os.MkdirAll(entireTmpDir, 0o750); err != nil {
+		t.Fatalf("Failed to create .entire/tmp: %v", err)
+	}
+
+	sessionID := "fallback-session"
+	state := PrePromptState{
+		SessionID:      sessionID,
+		UntrackedFiles: []string{".github/hooks/entire.json"},
+	}
+	data, err := json.Marshal(state)
+	if err != nil {
+		t.Fatalf("Failed to marshal state: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(entireTmpDir, "pre-prompt-"+sessionID+".json"), data, 0o600); err != nil {
+		t.Fatalf("Failed to write state file: %v", err)
+	}
+
+	// nil pre-task state should trigger fallback to pre-prompt state
+	result := resolveTaskPreUntrackedFiles(context.Background(), nil, sessionID)
+	if len(result) != 1 {
+		t.Fatalf("expected 1 file from pre-prompt fallback, got %d", len(result))
+	}
+	if result[0] != ".github/hooks/entire.json" {
+		t.Errorf("expected .github/hooks/entire.json, got %v", result)
+	}
+}
+
+func TestResolveTaskPreUntrackedFiles_NilWhenNoStateExists(t *testing.T) {
+	t.Parallel()
+
+	// nil pre-task state + nonexistent session → should return nil
+	result := resolveTaskPreUntrackedFiles(context.Background(), nil, "nonexistent-session")
+	if result != nil {
+		t.Errorf("expected nil when no state exists, got %v", result)
+	}
+}
+
+func TestResolveTaskPreUntrackedFiles_NilForEmptySessionID(t *testing.T) {
+	t.Parallel()
+
+	// nil pre-task state + empty session ID → should return nil (no fallback attempted)
+	result := resolveTaskPreUntrackedFiles(context.Background(), nil, "")
+	if result != nil {
+		t.Errorf("expected nil for empty session ID, got %v", result)
 	}
 }
 
