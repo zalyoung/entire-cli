@@ -6,6 +6,7 @@ import (
 	"go/token"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -169,7 +170,10 @@ func extractImports(t *testing.T, dir string) []string {
 	for _, pkg := range pkgs {
 		for _, file := range pkg.Files {
 			for _, imp := range file.Imports {
-				path := strings.Trim(imp.Path.Value, `"`)
+				path, err := strconv.Unquote(imp.Path.Value)
+				if err != nil {
+					t.Fatalf("strconv.Unquote(%s): %v", imp.Path.Value, err)
+				}
 				seen[path] = true
 			}
 		}
