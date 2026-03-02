@@ -58,25 +58,25 @@ func hasTTY() bool {
 	return true
 }
 
-// ttyConfirmResult represents the outcome of a TTY confirmation prompt.
-type ttyConfirmResult int
+// ttyResult represents the outcome of a TTY confirmation prompt.
+type ttyResult int
 
 const (
-	ttyConfirmYes    ttyConfirmResult = iota // User confirmed (y/yes/enter with default=yes)
-	ttyConfirmNo                             // User declined (n/no)
-	ttyConfirmAlways                         // User chose "always" (a/always)
+	ttyResultLink       ttyResult = iota // Link: add the checkpoint trailer
+	ttyResultSkip                        // Skip: don't add the trailer
+	ttyResultLinkAlways                  // Link and remember: add trailer + save "always" preference
 )
 
-// askConfirmTTY prompts the user for a yes/no/always confirmation via /dev/tty.
-// This works even when stdin is redirected (e.g., git commit -m).
-// Returns ttyConfirmYes, ttyConfirmNo, or ttyConfirmAlways.
-// If TTY is unavailable, returns ttyConfirmYes when defaultYes is true, ttyConfirmNo otherwise.
+// askConfirmTTY prompts the user via /dev/tty whether to link a commit to session context.
+// This requires a controlling terminal — callers must check hasTTY() first and handle
+// the no-TTY case (agent subprocesses, CI) themselves.
+//
 // header is displayed as the first line (e.g., "Entire: Active Claude Code session").
 // detail lines are displayed indented below the header.
-func askConfirmTTY(header string, details []string, prompt string, defaultYes bool) ttyConfirmResult {
-	defaultResult := ttyConfirmNo
+func askConfirmTTY(header string, details []string, prompt string, defaultYes bool) ttyResult {
+	defaultResult := ttyResultSkip
 	if defaultYes {
-		defaultResult = ttyConfirmYes
+		defaultResult = ttyResultLink
 	}
 
 	// In test mode, don't try to interact with the real TTY — just use the default.
@@ -86,18 +86,11 @@ func askConfirmTTY(header string, details []string, prompt string, defaultYes bo
 		return defaultResult
 	}
 
-	// Gemini CLI sets GEMINI_CLI=1 when running shell commands (including git commit).
-	// The agent can't respond to TTY prompts, so use the default to avoid hanging.
-	// See: https://geminicli.com/docs/tools/shell/
-	if os.Getenv("GEMINI_CLI") != "" {
-		return defaultResult
-	}
-
-	// Open /dev/tty for both reading and writing
+	// Open /dev/tty for both reading and writing.
 	// This is the controlling terminal, which works even when stdin/stderr are redirected
+	// (e.g., human runs git commit -m where stdin is not a pipe).
 	tty, err := os.OpenFile("/dev/tty", os.O_RDWR, 0)
 	if err != nil {
-		// Can't open TTY (e.g., running in CI), use default
 		return defaultResult
 	}
 	defer tty.Close()
@@ -126,11 +119,11 @@ func askConfirmTTY(header string, details []string, prompt string, defaultYes bo
 	response = strings.TrimSpace(strings.ToLower(response))
 	switch response {
 	case "y", "yes":
-		return ttyConfirmYes
+		return ttyResultLink
 	case "n", "no":
-		return ttyConfirmNo
+		return ttyResultSkip
 	case "a", "always":
-		return ttyConfirmAlways
+		return ttyResultLinkAlways
 	default:
 		// Empty or invalid input - use default
 		return defaultResult
@@ -419,13 +412,16 @@ func (s *ManualCommitStrategy) PrepareCommitMsg(ctx context.Context, commitMsgFi
 	// Add trailer differently based on commit source
 	switch source {
 	case "message":
-		// Using -m or -F: behavior depends on commit_linking setting
-		if commitLinking == settings.CommitLinkingAlways {
-			// Auto-link: add trailer without prompting
+		// Using -m or -F: behavior depends on TTY availability and commit_linking setting
+		switch {
+		case !hasTTY():
+			// No TTY (agent subprocess, CI) — auto-link without prompting
 			message = addCheckpointTrailer(message, checkpointID)
-		} else {
-			// Prompt mode: ask user interactively whether to add trailer
-			// (comments won't be stripped by git in this mode)
+		case commitLinking == settings.CommitLinkingAlways:
+			// User previously chose "always" — auto-link without prompting
+			message = addCheckpointTrailer(message, checkpointID)
+		default:
+			// Human at terminal — prompt interactively
 			header := "Entire: Active " + string(agentType) + " session detected"
 			var details []string
 			if displayPrompt != "" {
@@ -433,16 +429,15 @@ func (s *ManualCommitStrategy) PrepareCommitMsg(ctx context.Context, commitMsgFi
 			}
 
 			result := askConfirmTTY(header, details, "Link this commit to session context?", true)
-			if result == ttyConfirmNo {
-				// User declined - don't add trailer
+			if result == ttyResultSkip {
 				logging.Debug(logCtx, "prepare-commit-msg: user declined trailer",
 					slog.String("strategy", "manual-commit"),
 					slog.String("source", source),
 				)
 				return nil
 			}
-			if result == ttyConfirmAlways {
-				// User chose "always" - persist to settings.local.json (non-fatal if it fails)
+			if result == ttyResultLinkAlways {
+				// Persist preference so future commits auto-link (non-fatal if it fails)
 				if saveErr := saveCommitLinkingAlways(ctx); saveErr != nil {
 					logging.Warn(logCtx, "prepare-commit-msg: failed to save commit_linking=always",
 						slog.String("error", saveErr.Error()),
@@ -785,6 +780,11 @@ func (s *ManualCommitStrategy) PostCommit(ctx context.Context) error { //nolint:
 	committedFileSet := filesChangedInCommit(commit, headTree, parentTree)
 
 	for _, state := range sessions {
+		// Skip fully-condensed ended sessions — no work remains.
+		// These sessions only persist for LastCheckpointID (amend trailer reuse).
+		if state.FullyCondensed && state.Phase == session.PhaseEnded {
+			continue
+		}
 		s.postCommitProcessSession(ctx, repo, state, &transitionCtx, checkpointID,
 			head, commit, newHead, headTree, parentTree, committedFileSet,
 			shadowBranchesToDelete, uncondensedActiveOnBranch)
@@ -800,9 +800,10 @@ func (s *ManualCommitStrategy) PostCommit(ctx context.Context) error { //nolint:
 			continue
 		}
 		if err := deleteShadowBranch(ctx, repo, shadowBranchName); err != nil {
-			fmt.Fprintf(os.Stderr, "[entire] Warning: failed to clean up %s: %v\n", shadowBranchName, err)
+			logging.Warn(logCtx, "failed to clean up shadow branch",
+				slog.String("shadow_branch", shadowBranchName),
+				slog.String("error", err.Error()))
 		} else {
-			fmt.Fprintf(os.Stderr, "[entire] Cleaned up shadow branch: %s\n", shadowBranchName)
 			logging.Info(logCtx, "shadow branch deleted",
 				slog.String("strategy", "manual-commit"),
 				slog.String("shadow_branch", shadowBranchName),
@@ -914,7 +915,8 @@ func (s *ManualCommitStrategy) postCommitProcessSession(
 	}
 
 	if err := TransitionAndLog(ctx, state, session.EventGitCommit, *transitionCtx, handler); err != nil {
-		fmt.Fprintf(os.Stderr, "[entire] Warning: post-commit action handler error: %v\n", err)
+		logging.Warn(logCtx, "post-commit action handler error",
+			slog.String("error", err.Error()))
 	}
 
 	// Record checkpoint ID for ACTIVE sessions so HandleTurnEnd can finalize
@@ -950,9 +952,18 @@ func (s *ManualCommitStrategy) postCommitProcessSession(
 		}
 	}
 
+	// Mark ENDED sessions as fully condensed when no carry-forward remains.
+	// PostCommit will skip these sessions entirely on future commits.
+	// They persist only for LastCheckpointID (amend trailer restoration).
+	if handler.condensed && state.Phase == session.PhaseEnded && len(state.FilesTouched) == 0 {
+		state.FullyCondensed = true
+	}
+
 	// Save the updated state
 	if err := s.saveSessionState(ctx, state); err != nil {
-		fmt.Fprintf(os.Stderr, "[entire] Warning: failed to update session state: %v\n", err)
+		logging.Warn(logCtx, "failed to update session state",
+			slog.String("session_id", state.SessionID),
+			slog.String("error", err.Error()))
 	}
 
 	// Only preserve shadow branch for active sessions that were NOT condensed.
@@ -978,9 +989,7 @@ func (s *ManualCommitStrategy) condenseAndUpdateState(
 	logCtx := logging.WithComponent(ctx, "checkpoint")
 	result, err := s.CondenseSession(ctx, repo, checkpointID, state, committedFiles, opts...)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "[entire] Warning: condensation failed for session %s: %v\n",
-			state.SessionID, err)
-		logging.Warn(logCtx, "post-commit: condensation failed",
+		logging.Warn(logCtx, "condensation failed",
 			slog.String("session_id", state.SessionID),
 			slog.String("error", err.Error()),
 		)
@@ -1005,15 +1014,9 @@ func (s *ManualCommitStrategy) condenseAndUpdateState(
 	// Save checkpoint ID so subsequent commits can reuse it (e.g., amend restores trailer)
 	state.LastCheckpointID = checkpointID
 
-	shortID := state.SessionID
-	if len(shortID) > 8 {
-		shortID = shortID[:8]
-	}
-	fmt.Fprintf(os.Stderr, "[entire] Condensed session %s: %s (%d checkpoints)\n",
-		shortID, result.CheckpointID, result.CheckpointsCount)
-
 	logging.Info(logCtx, "session condensed",
 		slog.String("strategy", "manual-commit"),
+		slog.String("session_id", state.SessionID),
 		slog.String("checkpoint_id", result.CheckpointID.String()),
 		slog.Int("checkpoints_condensed", result.CheckpointsCount),
 		slog.Int("transcript_lines", result.TotalTranscriptLines),
@@ -1080,7 +1083,9 @@ func (s *ManualCommitStrategy) postCommitUpdateBaseCommitOnly(ctx context.Contex
 			)
 			state.BaseCommit = newHead
 			if err := s.saveSessionState(ctx, state); err != nil {
-				fmt.Fprintf(os.Stderr, "[entire] Warning: failed to update session state: %v\n", err)
+				logging.Warn(logCtx, "failed to update session state",
+					slog.String("session_id", state.SessionID),
+					slog.String("error", err.Error()))
 			}
 		}
 	}
@@ -1100,6 +1105,10 @@ func (s *ManualCommitStrategy) filterSessionsWithNewContent(ctx context.Context,
 	var result []*SessionState
 
 	for _, state := range sessions {
+		// Skip fully-condensed ended sessions — no new content possible.
+		if state.FullyCondensed && state.Phase == session.PhaseEnded {
+			continue
+		}
 		hasNew, err := s.sessionHasNewContent(ctx, repo, state)
 		if err != nil {
 			// On error, include the session (fail open for hooks)
@@ -1628,7 +1637,9 @@ func (s *ManualCommitStrategy) InitializeSession(ctx context.Context, sessionID 
 	if state != nil && state.BaseCommit != "" {
 		// Session is fully initialized — apply phase transition for TurnStart.
 		if transErr := TransitionAndLog(ctx, state, session.EventTurnStart, session.TransitionContext{}, session.NoOpActionHandler{}); transErr != nil {
-			fmt.Fprintf(os.Stderr, "[entire] Warning: turn start transition failed: %v\n", transErr)
+			logging.Warn(logging.WithComponent(ctx, "hooks"), "turn start transition failed",
+				slog.String("session_id", sessionID),
+				slog.String("error", transErr.Error()))
 		}
 
 		// Generate a new TurnID for each turn (correlates carry-forward checkpoints)
@@ -1689,7 +1700,9 @@ func (s *ManualCommitStrategy) InitializeSession(ctx context.Context, sessionID 
 
 	// Apply phase transition: new session starts as ACTIVE.
 	if transErr := TransitionAndLog(ctx, state, session.EventTurnStart, session.TransitionContext{}, session.NoOpActionHandler{}); transErr != nil {
-		fmt.Fprintf(os.Stderr, "[entire] Warning: turn start transition failed: %v\n", transErr)
+		logging.Warn(logging.WithComponent(ctx, "hooks"), "turn start transition failed",
+			slog.String("session_id", sessionID),
+			slog.String("error", transErr.Error()))
 	}
 
 	// Calculate attribution for pre-prompt edits
@@ -1700,7 +1713,8 @@ func (s *ManualCommitStrategy) InitializeSession(ctx context.Context, sessionID 
 		return fmt.Errorf("failed to save attribution: %w", err)
 	}
 
-	fmt.Fprintf(os.Stderr, "Initialized shadow session: %s\n", sessionID)
+	logging.Info(logging.WithComponent(ctx, "hooks"), "initialized shadow session",
+		slog.String("session_id", sessionID))
 	return nil
 }
 
