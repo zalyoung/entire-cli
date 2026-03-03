@@ -67,6 +67,39 @@ func TestParseHookEvent_TurnStart(t *testing.T) {
 	}
 }
 
+func TestParseHookEvent_TurnStart_IncludesModel(t *testing.T) {
+	t.Parallel()
+
+	ag := &OpenCodeAgent{}
+	input := `{"session_id": "sess-model", "prompt": "hello", "model": "claude-sonnet-4-20250514"}`
+
+	event, err := ag.ParseHookEvent(context.Background(), HookNameTurnStart, strings.NewReader(input))
+
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if event.Model != "claude-sonnet-4-20250514" {
+		t.Errorf("expected model 'claude-sonnet-4-20250514', got %q", event.Model)
+	}
+}
+
+func TestParseHookEvent_TurnStart_EmptyModel(t *testing.T) {
+	t.Parallel()
+
+	ag := &OpenCodeAgent{}
+	// Model field absent — should parse as empty string
+	input := `{"session_id": "sess-no-model", "prompt": "hello"}`
+
+	event, err := ag.ParseHookEvent(context.Background(), HookNameTurnStart, strings.NewReader(input))
+
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if event.Model != "" {
+		t.Errorf("expected empty model, got %q", event.Model)
+	}
+}
+
 func TestParseHookEvent_TurnEnd(t *testing.T) {
 	t.Parallel()
 
