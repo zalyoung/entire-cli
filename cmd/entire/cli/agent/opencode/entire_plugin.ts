@@ -104,7 +104,7 @@ export const EntirePlugin: Plugin = async ({ $, directory }) => {
           // session.idle is deprecated and not reliably emitted in run mode.
           const props = (event as any).properties
           if (props?.status?.type !== "idle") break
-          const sessionID = props?.sessionID
+          const sessionID = props?.sessionID ?? currentSessionID
           if (!sessionID) break
           // Use sync variant: `opencode run` exits on the same idle event,
           // so an async hook would be killed before completing.
@@ -133,6 +133,22 @@ export const EntirePlugin: Plugin = async ({ $, directory }) => {
           // Use sync variant: session-end may fire during shutdown.
           callHookSync("session-end", {
             session_id: session.id,
+          })
+          break
+        }
+
+        case "server.instance.disposed": {
+          // Fires when OpenCode shuts down (TUI close or `opencode run` exit).
+          // session.deleted only fires on explicit user deletion, not on quit,
+          // so this is the only reliable way to end sessions on exit.
+          if (!currentSessionID) break
+          const sessionID = currentSessionID
+          seenUserMessages.clear()
+          messageStore.clear()
+          currentSessionID = null
+          // Use sync variant: this is the last event before process exit.
+          callHookSync("session-end", {
+            session_id: sessionID,
           })
           break
         }
