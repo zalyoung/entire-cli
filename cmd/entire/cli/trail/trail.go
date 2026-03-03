@@ -69,7 +69,7 @@ const (
 	StatusOpen       Status = "open"
 	StatusInProgress Status = "in_progress"
 	StatusInReview   Status = "in_review"
-	StatusDone       Status = "done"
+	StatusMerged     Status = "merged"
 	StatusClosed     Status = "closed"
 )
 
@@ -80,7 +80,7 @@ func ValidStatuses() []Status {
 		StatusOpen,
 		StatusInProgress,
 		StatusInReview,
-		StatusDone,
+		StatusMerged,
 		StatusClosed,
 	}
 }
@@ -93,6 +93,43 @@ func (s Status) IsValid() bool {
 		}
 	}
 	return false
+}
+
+// Priority represents the priority level of a trail.
+type Priority string
+
+const (
+	PriorityUrgent Priority = "urgent"
+	PriorityHigh   Priority = "high"
+	PriorityMedium Priority = "medium"
+	PriorityLow    Priority = "low"
+	PriorityNone   Priority = "none"
+)
+
+// Type represents the type/category of a trail.
+type Type string
+
+const (
+	TypeBug      Type = "bug"
+	TypeFeature  Type = "feature"
+	TypeChore    Type = "chore"
+	TypeDocs     Type = "docs"
+	TypeRefactor Type = "refactor"
+)
+
+// ReviewerStatus represents the review status for a reviewer.
+type ReviewerStatus string
+
+const (
+	ReviewerPending          ReviewerStatus = "pending"
+	ReviewerApproved         ReviewerStatus = "approved"
+	ReviewerChangesRequested ReviewerStatus = "changes_requested"
+)
+
+// Reviewer represents a reviewer assigned to a trail.
+type Reviewer struct {
+	Login  string         `json:"login"`
+	Status ReviewerStatus `json:"status"`
 }
 
 // Metadata represents the metadata for a trail, matching the web PR format.
@@ -108,7 +145,10 @@ type Metadata struct {
 	Labels    []string   `json:"labels"`
 	CreatedAt time.Time  `json:"created_at"`
 	UpdatedAt time.Time  `json:"updated_at"`
-	MergedAt  *time.Time `json:"merged_at,omitempty"`
+	MergedAt  *time.Time `json:"merged_at"`
+	Priority  Priority   `json:"priority,omitempty"`
+	Type      Type       `json:"type,omitempty"`
+	Reviewers []Reviewer `json:"reviewers,omitempty"`
 }
 
 // Discussion holds the discussion/comments for a trail.
@@ -118,11 +158,14 @@ type Discussion struct {
 
 // Comment represents a single comment on a trail.
 type Comment struct {
-	ID        string         `json:"id"`
-	Author    string         `json:"author"`
-	Body      string         `json:"body"`
-	CreatedAt time.Time      `json:"created_at"`
-	Replies   []CommentReply `json:"replies,omitempty"`
+	ID         string         `json:"id"`
+	Author     string         `json:"author"`
+	Body       string         `json:"body"`
+	CreatedAt  time.Time      `json:"created_at"`
+	Resolved   bool           `json:"resolved"`
+	ResolvedBy *string        `json:"resolved_by"`
+	ResolvedAt *time.Time     `json:"resolved_at"`
+	Replies    []CommentReply `json:"replies,omitempty"`
 }
 
 // CommentReply represents a reply to a comment.
@@ -148,7 +191,7 @@ type CheckpointRef struct {
 	CheckpointID string    `json:"checkpoint_id"`
 	CommitSHA    string    `json:"commit_sha"`
 	CreatedAt    time.Time `json:"created_at"`
-	Summary      string    `json:"summary,omitempty"`
+	Summary      *string   `json:"summary"`
 }
 
 // Checkpoints holds the list of checkpoint references for a trail.

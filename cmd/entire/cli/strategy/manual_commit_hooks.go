@@ -2245,9 +2245,10 @@ func (s *ManualCommitStrategy) carryForwardToNewShadowBranch(
 // appendCheckpointToExistingTrail links a checkpoint to the given trail.
 // Best-effort: silently returns on any error (trails are non-critical metadata).
 func appendCheckpointToExistingTrail(store *trail.Store, trailID trail.ID, cpID id.CheckpointID, commitSHA plumbing.Hash, prompts []string) {
-	var summary string
+	var summary *string
 	if len(prompts) > 0 {
-		summary = truncateForSummary(prompts[len(prompts)-1], 200)
+		s := truncateForSummary(prompts[len(prompts)-1], 200)
+		summary = &s
 	}
 
 	//nolint:errcheck,gosec // best-effort: trail checkpoint linking is non-critical

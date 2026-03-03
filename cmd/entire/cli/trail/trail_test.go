@@ -108,7 +108,7 @@ func TestStatus_IsValid(t *testing.T) {
 		{StatusOpen, true},
 		{StatusInProgress, true},
 		{StatusInReview, true},
-		{StatusDone, true},
+		{StatusMerged, true},
 		{StatusClosed, true},
 		{"invalid", false},
 		{"", false},
@@ -132,7 +132,7 @@ func TestValidStatuses(t *testing.T) {
 		t.Errorf("expected 6 statuses, got %d", len(statuses))
 	}
 	// Verify lifecycle order
-	expected := []Status{StatusDraft, StatusOpen, StatusInProgress, StatusInReview, StatusDone, StatusClosed}
+	expected := []Status{StatusDraft, StatusOpen, StatusInProgress, StatusInReview, StatusMerged, StatusClosed}
 	for i, s := range expected {
 		if statuses[i] != s {
 			t.Errorf("status[%d] = %q, want %q", i, statuses[i], s)

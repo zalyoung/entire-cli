@@ -100,7 +100,7 @@ func newTrailListCmd() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().StringVar(&statusFilter, "status", "", "Filter by status (draft, open, in_progress, in_review, done, closed)")
+	cmd.Flags().StringVar(&statusFilter, "status", "", "Filter by status (draft, open, in_progress, in_review, merged, closed)")
 	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Output as JSON")
 
 	return cmd
@@ -389,11 +389,11 @@ func runTrailUpdate(w io.Writer, statusStr, title, body, branch string, labelAdd
 	noFlags := statusStr == "" && title == "" && body == "" && labelAdd == nil && labelRemove == nil
 	if noFlags {
 		// Build status options with current value as default.
-		// Exclude "done" and "closed" unless the trail is already in that status
+		// Exclude "merged" and "closed" unless the trail is already in that status
 		// (otherwise the select would silently reset to the first option).
 		var statusOptions []huh.Option[string]
 		for _, s := range trail.ValidStatuses() {
-			if (s == trail.StatusDone || s == trail.StatusClosed) && s != metadata.Status {
+			if (s == trail.StatusMerged || s == trail.StatusClosed) && s != metadata.Status {
 				continue
 			}
 			label := string(s)
@@ -502,7 +502,7 @@ func runTrailCreateInteractive(title, body, branch, statusStr *string) error {
 	// Build status options, excluding done/closed
 	var statusOptions []huh.Option[string]
 	for _, s := range trail.ValidStatuses() {
-		if s == trail.StatusDone || s == trail.StatusClosed {
+		if s == trail.StatusMerged || s == trail.StatusClosed {
 			continue
 		}
 		statusOptions = append(statusOptions, huh.NewOption(string(s), string(s)))
