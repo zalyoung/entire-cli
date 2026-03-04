@@ -161,56 +161,56 @@ cat > "$HOOK_FILE" <<HOOKEOF
     "sessionStart": [
       {
         "type": "command",
-        "bash": "cat > '${CAPTURE_DIR}/sessionStart-\$(date +%s%N).json'",
+        "bash": "cat > '${CAPTURE_DIR}/sessionStart-\$(date +%s)-\$\$-\$RANDOM.json'",
         "comment": "Entire CLI integration probe"
       }
     ],
     "sessionEnd": [
       {
         "type": "command",
-        "bash": "cat > '${CAPTURE_DIR}/sessionEnd-\$(date +%s%N).json'",
+        "bash": "cat > '${CAPTURE_DIR}/sessionEnd-\$(date +%s)-\$\$-\$RANDOM.json'",
         "comment": "Entire CLI integration probe"
       }
     ],
     "userPromptSubmitted": [
       {
         "type": "command",
-        "bash": "cat > '${CAPTURE_DIR}/userPromptSubmitted-\$(date +%s%N).json'",
+        "bash": "cat > '${CAPTURE_DIR}/userPromptSubmitted-\$(date +%s)-\$\$-\$RANDOM.json'",
         "comment": "Entire CLI integration probe"
       }
     ],
     "agentStop": [
       {
         "type": "command",
-        "bash": "cat > '${CAPTURE_DIR}/agentStop-\$(date +%s%N).json'",
+        "bash": "cat > '${CAPTURE_DIR}/agentStop-\$(date +%s)-\$\$-\$RANDOM.json'",
         "comment": "Entire CLI integration probe"
       }
     ],
     "subagentStop": [
       {
         "type": "command",
-        "bash": "cat > '${CAPTURE_DIR}/subagentStop-\$(date +%s%N).json'",
+        "bash": "cat > '${CAPTURE_DIR}/subagentStop-\$(date +%s)-\$\$-\$RANDOM.json'",
         "comment": "Entire CLI integration probe"
       }
     ],
     "preToolUse": [
       {
         "type": "command",
-        "bash": "cat > '${CAPTURE_DIR}/preToolUse-\$(date +%s%N).json'",
+        "bash": "cat > '${CAPTURE_DIR}/preToolUse-\$(date +%s)-\$\$-\$RANDOM.json'",
         "comment": "Entire CLI integration probe"
       }
     ],
     "postToolUse": [
       {
         "type": "command",
-        "bash": "cat > '${CAPTURE_DIR}/postToolUse-\$(date +%s%N).json'",
+        "bash": "cat > '${CAPTURE_DIR}/postToolUse-\$(date +%s)-\$\$-\$RANDOM.json'",
         "comment": "Entire CLI integration probe"
       }
     ],
     "errorOccurred": [
       {
         "type": "command",
-        "bash": "cat > '${CAPTURE_DIR}/errorOccurred-\$(date +%s%N).json'",
+        "bash": "cat > '${CAPTURE_DIR}/errorOccurred-\$(date +%s)-\$\$-\$RANDOM.json'",
         "comment": "Entire CLI integration probe"
       }
     ]

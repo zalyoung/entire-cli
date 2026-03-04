@@ -78,7 +78,9 @@ func (c *CopilotCLIAgent) ResolveSessionFile(sessionDir, agentSessionID string) 
 }
 
 // ProtectedDirs returns directories that Copilot CLI uses for config/state.
-func (c *CopilotCLIAgent) ProtectedDirs() []string { return []string{".github"} }
+func (c *CopilotCLIAgent) ProtectedDirs() []string {
+	return []string{filepath.Join(".github", "hooks")}
+}
 
 // ReadSession reads a session from Copilot CLI's storage (JSONL transcript file).
 func (c *CopilotCLIAgent) ReadSession(input *agent.HookInput) (*agent.AgentSession, error) {

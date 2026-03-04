@@ -3,8 +3,6 @@ package copilotcli
 import (
 	"context"
 	"io"
-	"os"
-	"path/filepath"
 	"time"
 
 	"github.com/entireio/cli/cmd/entire/cli/agent"
@@ -134,15 +132,10 @@ func (c *CopilotCLIAgent) parseSubagentStop(stdin io.Reader) (*agent.Event, erro
 // Copilot CLI stores transcripts at ~/.copilot/session-state/<sessionId>/events.jsonl.
 // The userPromptSubmitted hook does not include a transcriptPath field, so we compute it.
 func (c *CopilotCLIAgent) resolveTranscriptRef(ctx context.Context, sessionID string) string {
-	if override := os.Getenv("ENTIRE_TEST_COPILOT_SESSION_DIR"); override != "" {
-		return filepath.Join(override, sessionID, "events.jsonl")
-	}
-
-	homeDir, err := os.UserHomeDir()
+	sessionDir, err := c.GetSessionDir(sessionID)
 	if err != nil {
-		logging.Warn(ctx, "copilot-cli: failed to get home directory for transcript resolution", "err", err)
+		logging.Warn(ctx, "copilot-cli: failed to resolve transcript path", "err", err)
 		return ""
 	}
-
-	return filepath.Join(homeDir, ".copilot", "session-state", sessionID, "events.jsonl")
+	return c.ResolveSessionFile(sessionDir, sessionID)
 }

@@ -414,6 +414,105 @@ func TestGetSupportedHooks(t *testing.T) {
 	}
 }
 
+func TestInstallHooks_PreservesEntryLevelFields(t *testing.T) {
+	// Cannot use t.Parallel() because t.Chdir is required for paths.WorktreeRoot.
+	tempDir := t.TempDir()
+
+	// Set up a minimal git repo so paths.WorktreeRoot succeeds.
+	initGitRepo(t, tempDir)
+	t.Chdir(tempDir)
+
+	// Write an existing hooks file with a user entry that has cwd, timeoutSec, and env.
+	existingJSON := `{
+  "version": 1,
+  "hooks": {
+    "agentStop": [
+      {
+        "type": "command",
+        "bash": "echo user stop",
+        "cwd": "/home/user/project",
+        "timeoutSec": 30,
+        "env": {
+          "MY_VAR": "hello",
+          "OTHER": "world"
+        }
+      }
+    ]
+  }
+}`
+	githubHooksDir := filepath.Join(tempDir, ".github", "hooks")
+	if err := os.MkdirAll(githubHooksDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(githubHooksDir, HooksFileName), []byte(existingJSON), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Install hooks (adds Entire entries alongside the user entry).
+	ag := &CopilotCLIAgent{}
+	count, err := ag.InstallHooks(context.Background(), false, false)
+	if err != nil {
+		t.Fatalf("InstallHooks() error = %v", err)
+	}
+	if count == 0 {
+		t.Fatal("InstallHooks() installed 0 hooks, expected > 0")
+	}
+
+	// Re-read the file and parse hook entries.
+	data, err := os.ReadFile(filepath.Join(githubHooksDir, HooksFileName))
+	if err != nil {
+		t.Fatalf("failed to read hooks file: %v", err)
+	}
+
+	var rawFile map[string]json.RawMessage
+	if err := json.Unmarshal(data, &rawFile); err != nil {
+		t.Fatalf("failed to parse hooks file: %v", err)
+	}
+
+	var rawHooks map[string]json.RawMessage
+	if err := json.Unmarshal(rawFile["hooks"], &rawHooks); err != nil {
+		t.Fatalf("failed to parse hooks: %v", err)
+	}
+
+	var agentStopEntries []CopilotHookEntry
+	if err := json.Unmarshal(rawHooks["agentStop"], &agentStopEntries); err != nil {
+		t.Fatalf("failed to parse agentStop entries: %v", err)
+	}
+
+	// Find the user's entry (not the Entire entry).
+	var userEntry *CopilotHookEntry
+	for i := range agentStopEntries {
+		if agentStopEntries[i].Bash == "echo user stop" {
+			userEntry = &agentStopEntries[i]
+			break
+		}
+	}
+	if userEntry == nil {
+		t.Fatal("user hook entry with bash 'echo user stop' not found after round-trip")
+	}
+
+	// Verify cwd is preserved.
+	if userEntry.Cwd != "/home/user/project" {
+		t.Errorf("cwd = %q, want %q", userEntry.Cwd, "/home/user/project")
+	}
+
+	// Verify timeoutSec is preserved.
+	if userEntry.TimeoutSec != 30 {
+		t.Errorf("timeoutSec = %d, want %d", userEntry.TimeoutSec, 30)
+	}
+
+	// Verify env is preserved.
+	if len(userEntry.Env) != 2 {
+		t.Errorf("env has %d entries, want 2", len(userEntry.Env))
+	}
+	if userEntry.Env["MY_VAR"] != "hello" {
+		t.Errorf("env[MY_VAR] = %q, want %q", userEntry.Env["MY_VAR"], "hello")
+	}
+	if userEntry.Env["OTHER"] != "world" {
+		t.Errorf("env[OTHER] = %q, want %q", userEntry.Env["OTHER"], "world")
+	}
+}
+
 // --- Test helpers ---
 
 func readHooksFile(t *testing.T, tempDir string) CopilotHooksFile {

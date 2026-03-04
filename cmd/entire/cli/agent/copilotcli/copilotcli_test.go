@@ -70,8 +70,9 @@ func TestCopilotCLIAgent_ProtectedDirs(t *testing.T) {
 	t.Parallel()
 	ag := &CopilotCLIAgent{}
 	dirs := ag.ProtectedDirs()
-	if len(dirs) != 1 || dirs[0] != ".github" {
-		t.Errorf("ProtectedDirs() = %v, want [.github]", dirs)
+	expected := filepath.Join(".github", "hooks")
+	if len(dirs) != 1 || dirs[0] != expected {
+		t.Errorf("ProtectedDirs() = %v, want [%s]", dirs, expected)
 	}
 }
 

@@ -114,6 +114,7 @@ func (c *CopilotCLI) StartSession(ctx context.Context, dir string) (Session, err
 	// Dismiss startup dialogs (folder trust, etc.) then wait for the "❯" prompt.
 	// Copilot CLI shows a "Confirm folder trust" dialog in interactive mode for
 	// new directories. "Yes" is pre-selected, so Enter dismisses it.
+	foundPrompt := false
 	for range 5 {
 		content, err := s.WaitFor(`(❯|Enter to select)`, 30*time.Second)
 		if err != nil {
@@ -121,10 +122,15 @@ func (c *CopilotCLI) StartSession(ctx context.Context, dir string) (Session, err
 			return nil, fmt.Errorf("waiting for startup prompt: %w", err)
 		}
 		if strings.Contains(content, "❯") && !strings.Contains(content, "Enter to select") {
+			foundPrompt = true
 			break
 		}
 		_ = s.SendKeys("Enter")
 		time.Sleep(500 * time.Millisecond)
+	}
+	if !foundPrompt {
+		_ = s.Close()
+		return nil, errors.New("copilot CLI did not reach interactive prompt after dismissing startup dialogs")
 	}
 	s.stableAtSend = ""
 

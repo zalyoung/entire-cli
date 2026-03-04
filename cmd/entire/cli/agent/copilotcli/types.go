@@ -26,13 +26,15 @@ type CopilotHooks struct {
 
 // CopilotHookEntry represents a single hook command.
 // Copilot CLI hooks have a type field ("command") and a bash field for the command string.
-// Optional fields: cwd, timeoutSec, env, comment.
-//
+// Optional fields (cwd, timeoutSec, env, comment) are preserved on round-trip.
 
 type CopilotHookEntry struct {
-	Type    string `json:"type"`
-	Bash    string `json:"bash"`
-	Comment string `json:"comment,omitempty"`
+	Type       string            `json:"type"`
+	Bash       string            `json:"bash"`
+	Comment    string            `json:"comment,omitempty"`
+	Cwd        string            `json:"cwd,omitempty"`
+	TimeoutSec int               `json:"timeoutSec,omitempty"`
+	Env        map[string]string `json:"env,omitempty"`
 }
 
 // userPromptSubmittedRaw is the JSON structure from userPromptSubmitted hooks.
