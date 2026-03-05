@@ -127,6 +127,8 @@ func runTrailListAll(w io.Writer, statusFilter string, jsonOutput, showAll bool)
 		trails = []*trail.Metadata{}
 	}
 
+	totalCount := len(trails)
+
 	// Apply status filter
 	if statusFilter != "" {
 		status := trail.Status(statusFilter)
@@ -166,12 +168,17 @@ func runTrailListAll(w io.Writer, statusFilter string, jsonOutput, showAll bool)
 	}
 
 	if len(trails) == 0 {
-		fmt.Fprintln(w, "No trails found.")
-		fmt.Fprintln(w)
-		fmt.Fprintln(w, "Commands:")
-		fmt.Fprintln(w, "  entire trail create   Create a trail for the current branch")
-		fmt.Fprintln(w, "  entire trail list     List all trails")
-		fmt.Fprintln(w, "  entire trail update   Update trail metadata")
+		hiddenCount := totalCount - len(trails)
+		if hiddenCount > 0 {
+			fmt.Fprintf(w, "No active trails found. %d merged/closed trail(s) hidden — use --all to show.\n", hiddenCount)
+		} else {
+			fmt.Fprintln(w, "No trails found.")
+			fmt.Fprintln(w)
+			fmt.Fprintln(w, "Commands:")
+			fmt.Fprintln(w, "  entire trail create   Create a trail for the current branch")
+			fmt.Fprintln(w, "  entire trail list     List all trails")
+			fmt.Fprintln(w, "  entire trail update   Update trail metadata")
+		}
 		return nil
 	}
 
