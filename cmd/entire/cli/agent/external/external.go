@@ -425,9 +425,11 @@ func (e *Agent) run(ctx context.Context, stdin []byte, args ...string) ([]byte, 
 		cmd.Stdin = bytes.NewReader(stdin)
 	}
 
+	const maxOutputBytes = 10 * 1024 * 1024 // 10 MB
+
 	var stdoutBuf, stderrBuf bytes.Buffer
-	cmd.Stdout = &stdoutBuf
-	cmd.Stderr = &stderrBuf
+	cmd.Stdout = &limitedWriter{buf: &stdoutBuf, limit: maxOutputBytes}
+	cmd.Stderr = &limitedWriter{buf: &stderrBuf, limit: maxOutputBytes}
 
 	if err := cmd.Run(); err != nil {
 		errMsg := strings.TrimSpace(stderrBuf.String())
@@ -441,6 +443,24 @@ func (e *Agent) run(ctx context.Context, stdin []byte, args ...string) ([]byte, 
 }
 
 // --- Helpers ---
+
+// limitedWriter wraps a bytes.Buffer and stops writing after limit bytes,
+// preventing unbounded memory growth from external process output.
+type limitedWriter struct {
+	buf   *bytes.Buffer
+	limit int
+}
+
+func (w *limitedWriter) Write(p []byte) (int, error) {
+	remaining := w.limit - w.buf.Len()
+	if remaining <= 0 {
+		return len(p), nil // discard, but report success so the process isn't killed
+	}
+	if len(p) > remaining {
+		p = p[:remaining]
+	}
+	return w.buf.Write(p)
+}
 
 func marshalHookInput(input *agent.HookInput) ([]byte, error) {
 	if input == nil {
