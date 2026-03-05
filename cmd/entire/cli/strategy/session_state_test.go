@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -620,17 +621,16 @@ func TestClearSessionState_RemovesHintFile(t *testing.T) {
 		t.Fatalf("ClearSessionState() error = %v", cErr)
 	}
 
-	stateFile, sfErr := sessionStateFile(ctx, sessionID)
-	if sfErr != nil {
-		t.Fatalf("sessionStateFile() error = %v", sfErr)
+	stateDir, sdErr := getSessionStateDir(ctx)
+	if sdErr != nil {
+		t.Fatalf("getSessionStateDir() error = %v", sdErr)
 	}
-	if _, statErr := os.Stat(stateFile); !os.IsNotExist(statErr) {
-		t.Error("state file should be removed after ClearSessionState()")
+	matches, err := filepath.Glob(filepath.Join(stateDir, sessionID+".*"))
+	if err != nil {
+		t.Fatalf("filepath.Glob() error = %v", err)
 	}
-
-	hintFile := stateFile[:len(stateFile)-len(".json")] + ".model"
-	if _, statErr := os.Stat(hintFile); !os.IsNotExist(statErr) {
-		t.Error("hint file should be removed after ClearSessionState()")
+	if len(matches) != 0 {
+		t.Errorf("expected no files for session after clear, found: %v", matches)
 	}
 }
 
@@ -655,12 +655,15 @@ func TestClearSessionState_RemovesOrphanedHintFile(t *testing.T) {
 		t.Fatalf("ClearSessionState() error = %v", cErr)
 	}
 
-	stateFile, sfErr := sessionStateFile(ctx, sessionID)
-	if sfErr != nil {
-		t.Fatalf("sessionStateFile() error = %v", sfErr)
+	stateDir, sdErr := getSessionStateDir(ctx)
+	if sdErr != nil {
+		t.Fatalf("getSessionStateDir() error = %v", sdErr)
 	}
-	hintFile := stateFile[:len(stateFile)-len(".json")] + ".model"
-	if _, statErr := os.Stat(hintFile); !os.IsNotExist(statErr) {
-		t.Error("orphaned hint file should be removed after ClearSessionState()")
+	matches, err := filepath.Glob(filepath.Join(stateDir, sessionID+".*"))
+	if err != nil {
+		t.Fatalf("filepath.Glob() error = %v", err)
+	}
+	if len(matches) != 0 {
+		t.Errorf("expected no files for session after clear, found: %v", matches)
 	}
 }
