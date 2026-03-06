@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -14,6 +13,7 @@ import (
 	"github.com/entireio/cli/cmd/entire/cli/agent/types"
 	"github.com/entireio/cli/cmd/entire/cli/paths"
 	"github.com/entireio/cli/cmd/entire/cli/strategy"
+	"github.com/entireio/cli/cmd/entire/cli/testutil"
 	"github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing/object"
 )
@@ -446,18 +446,10 @@ func TestDispatchLifecycleEvent_RoutesToCorrectHandler(t *testing.T) {
 	// in the real repo whenever untracked files exist, because DetectFileChanges
 	// reports them as new files and SaveTaskStep falls back to initializeSession.
 	tmpDir := t.TempDir()
-	for _, args := range [][]string{
-		{"init"},
-		{"config", "user.email", "test@test.com"},
-		{"config", "user.name", "Test User"},
-		{"commit", "--allow-empty", "--no-gpg-sign", "-m", "init"},
-	} {
-		cmd := exec.CommandContext(context.Background(), "git", args...)
-		cmd.Dir = tmpDir
-		if out, err := cmd.CombinedOutput(); err != nil {
-			t.Fatalf("git %s failed: %v\n%s", args[0], err, out)
-		}
-	}
+	testutil.InitRepo(t, tmpDir)
+	testutil.WriteFile(t, tmpDir, "init.txt", "init")
+	testutil.GitAdd(t, tmpDir, "init.txt")
+	testutil.GitCommit(t, tmpDir, "init")
 	t.Chdir(tmpDir)
 
 	// Test that each event type is routed (we can't easily verify which handler
