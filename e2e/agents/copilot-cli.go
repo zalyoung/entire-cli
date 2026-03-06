@@ -132,7 +132,7 @@ func (c *CopilotCLI) StartSession(ctx context.Context, dir string) (Session, err
 		return nil, errors.New("COPILOT_GITHUB_TOKEN is not set; copilot-cli interactive session requires authentication")
 	}
 	var envArgs []string
-	for _, key := range []string{"COPILOT_GITHUB_TOKEN", "PATH", "HOME", "TERM"} {
+	for _, key := range []string{"COPILOT_GITHUB_TOKEN", "HOME", "TERM"} {
 		if v := os.Getenv(key); v != "" {
 			envArgs = append(envArgs, key+"="+v)
 		}
